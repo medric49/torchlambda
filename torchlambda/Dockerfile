@@ -1,35 +1,21 @@
-FROM amazonlinux:latest AS builder
+FROM szymonmaszke/torchlambda:latest
 
-ARG AWS=" "
-ARG PYTORCH=" "
-ARG PYTORCH_VERSION="latest"
-
-RUN yum -y group install "Development Tools" && \
-  yum -y install unzip git wget rh-python37 ninja-build cmake3 curl-devel \
-  libcurl-devel libuuid-devel openssl-devel && \
-  pip3 install --no-cache-dir pyyaml==5.3 && \
+RUN pip3 install --upgrade pip && \
   pip3 install opencv-python && \
-  ln -s /usr/bin/ninja-build /usr/bin/ninja
+  yum install -y g++ cmake make wget unzip git
 
-WORKDIR /home/app
-COPY . /home/app
+RUN wget -O opencv.zip https://github.com/opencv/opencv/archive/master.zip
+RUN unzip opencv.zip
+RUN yum update -y
+RUN yum remove cmake -y
+RUN pip3 install cmake
+RUN mv opencv-master opencv && \
+    mkdir -p build && cd build && \
+    cmake ../opencv && \
+    make -j4
 
-RUN cd dependencies && \
-  ./aws-lambda.sh && \
-  ./aws-sdk.sh ${AWS} && \
-  ./torch.sh ${PYTORCH_VERSION} ${PYTORCH} && \
-  cp -r pytorch/build_mobile/install/* /usr/local/ && \
-  cp ../CMakeLists.txt ../build.sh /usr/local/
-
-# Final image with copied install dependencies
-FROM amazonlinux:latest
-COPY --from=builder /usr/local /usr/local
-
-RUN yum -y install libcurl-devel libuuid-devel openssl-devel gcc-c++ make cmake3 zip
-
-LABEL maintainer="szymon.maszke@protonmail.com"
-
-WORKDIR /usr/local
-
+RUN cd build && make install
+RUN rm -r build
+RUN echo "tdfest" && ls /usr/local/bin
 ENTRYPOINT ["./build.sh"]
 CMD []
